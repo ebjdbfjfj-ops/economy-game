@@ -26,9 +26,10 @@ const io = new Server(server, {
 const PORT = process.env.PORT || 3000;
 
 // 정적 파일(프론트엔드) 서빙 - /public 폴더 안의 index.html, style.css, client.js
-app.use(express.static(path.join(__dirname, "public")));
-
-/* ============================================================
+app.use(express.static(path.join(__dirname)));
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "index.html"));
+});
  *  게임 상수 정의 (기존 HTML의 로직을 그대로 서버로 이식)
  * ============================================================
  */
