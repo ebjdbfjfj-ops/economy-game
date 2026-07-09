@@ -1,0 +1,1353 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>마을 경제 게임 (멀티플레이)</title>
+<!-- Socket.IO 클라이언트 라이브러리 -->
+<script src="/socket.io/socket.io.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css?family=Gowun+Dodum&display=swap');
+body {
+font-family: 'Gowun Dodum', sans-serif;
+background-color: #121212;
+color: #ffffff;
+display: flex;
+justify-content: center;
+align-items: center;
+height: 100vh;
+margin: 0;
+overflow: hidden;
+}
+.game-container {
+position: relative;
+border: 2px solid #4CAF50;
+border-radius: 10px;
+padding: 30px 30px 60px 30px;
+width: 720px;
+background-color: #1e1e1e;
+box-shadow: 0 0 15px rgba(76, 175, 80, 0.3);
+text-align: center;
+max-height: 95vh;
+overflow-y: auto;
+}
+.game-container::-webkit-scrollbar { width: 8px; }
+.game-container::-webkit-scrollbar-thumb { background: #4CAF50; border-radius: 4px; }
+h1 {
+color: #4CAF50;
+margin-top: 0;
+border-bottom: 1px dashed #4CAF50;
+padding-bottom: 15px;
+}
+.start-btn {
+background-color: #4CAF50;
+color: white;
+border: none;
+padding: 15px 30px;
+font-size: 1.2rem;
+border-radius: 5px;
+cursor: pointer;
+font-family: inherit;transition: 0.2s;
+margin-top: 10px;
+}
+.start-btn:hover {
+background-color: #45a049;
+transform: scale(1.05);
+}
+.start-btn:disabled {
+background-color: #555 !important;
+color: #999 !important;
+cursor: not-allowed;
+transform: none !important;
+}
+#game-ui, #action-phase {
+display: none;
+text-align: left;
+position: relative;
+}
+.main-layout {
+display: flex;
+gap: 20px;
+margin-bottom: 15px;
+align-items: flex-start;
+}
+.left-content {
+flex: 1;
+min-width: 0;
+}
+.status-box {
+border: 1px solid #555;
+padding: 15px;
+margin-bottom: 15px;
+border-radius: 5px;
+background-color: #2a2a2a;
+}
+.event-box {
+background-color: #331a00;
+border: 1px solid #ff9800;
+}
+.role-icon {
+font-size: 3rem;
+text-align: center;
+margin: 10px 0;
+}
+.role-title {
+text-align: center;
+font-size: 1.5rem;
+color: #FFD700;
+margin-bottom: 15px;
+}
+ul {
+padding-left: 20px;
+margin: 5px 0;
+}li {
+margin-bottom: 5px;
+}
+.goal {
+color: #ff9800;
+font-weight: bold;
+margin-top: 15px;
+border-top: 1px dashed #555;
+padding-top: 10px;
+}
+.action-btns {
+display: flex;
+justify-content: space-between;
+margin-top: 15px;
+flex-wrap: wrap;
+gap: 10px 0;
+}
+.action-btns button {
+background-color: #333;
+color: white;
+border: 1px solid #555;
+padding: 10px;
+border-radius: 5px;
+cursor: pointer;
+width: 48%;
+font-family: inherit;
+transition: 0.2s;
+}
+.action-btns button:hover:not(:disabled) {
+background-color: #4CAF50;
+color: white;
+}
+.action-btns button:disabled {
+background-color: #555;
+color: #888;
+cursor: not-allowed;
+border-color: #444;
+}
+.column-btns {
+flex-direction: column;
+gap: 10px;
+}
+.column-btns button {
+width: 100%;
+}
+.sub-menu {
+display: none;
+margin-top: 10px;border-top: 1px dashed #777;
+padding-top: 10px;
+}
+.back-btn {
+background-color: #d32f2f !important;
+margin-top: 10px;
+}
+.back-btn:hover {
+background-color: #b71c1c !important;
+}
+textarea, input[type="text"], input[type="number"], select {
+width: 100%;
+background-color: #121212;
+color: #fff;
+border: 1px solid #555;
+border-radius: 5px;
+padding: 10px;
+box-sizing: border-box;
+font-family: inherit;
+resize: none;
+margin-bottom: 10px;
+}
+#black-screen {
+display: none;
+position: absolute;
+top: 0; left: 0; width: 100%; height: 100%;
+background-color: #000000;
+box-sizing: border-box;
+padding: 40px 20px;
+z-index: 100;
+flex-direction: column;
+justify-content: center;
+align-items: center;
+border-radius: 10px;
+overflow-y: auto;
+}
+#black-screen h2 {
+font-size: 2.5rem;
+color: #ff3333;
+margin: 0 0 20px 0;
+letter-spacing: 3px;
+animation: blink 1.5s infinite;
+}
+@keyframes blink {
+0%, 100% { opacity: 1; }
+50% { opacity: 0.4; }
+}
+.next-round-btn {position: absolute;
+bottom: 15px;
+right: 15px;
+background-color: #ff3333;
+color: white;
+border: none;
+padding: 10px 15px;
+border-radius: 5px;
+cursor: pointer;
+font-family: inherit;
+font-weight: bold;
+box-shadow: 0 2px 10px rgba(255, 51, 51, 0.4);
+z-index: 20;
+}
+.next-round-btn:hover {
+background-color: #cc0000;
+transform: scale(1.05);
+}
+.next-round-btn:disabled {
+background-color: #777;
+cursor: not-allowed;
+box-shadow: none;
+}
+#activity-log-container {
+width: 240px;
+height: 180px;
+background-color: rgba(20, 20, 20, 0.95);
+border: 1px solid #4CAF50;
+border-radius: 5px;
+padding: 10px;
+font-size: 0.75rem;
+overflow-y: auto;
+display: none;
+text-align: left;
+box-shadow: 0 0 10px rgba(76, 175, 80, 0.2);
+z-index: 20;
+align-self: stretch;
+}
+.log-entry { margin-bottom: 4px; padding-bottom: 4px; border-bottom: 1px dashed #444;
+word-break: keep-all; }
+#chat-history {
+height: 120px;
+overflow-y: auto;
+background-color: #0a0a0a;
+border: 1px solid #555;
+padding: 10px;
+border-radius: 5px;
+margin-bottom: 10px;
+font-size: 0.85rem;
+text-align: left;
+}
+.chat-msg {
+margin: 5px 0;padding: 5px;
+border-radius: 5px;
+background-color: #333;
+word-break: break-all;
+}
+.my-msg { background-color: #1e4620; text-align: right; }
+.section-box {
+background-color: rgba(255, 255, 255, 0.05);
+padding: 10px;
+border-radius: 5px;
+margin-bottom: 10px;
+border: 1px solid #444;
+}
+.inventory-list { font-size: 0.85rem; color: #aaa; margin-top: 5px; }
+.inventory-item { display: inline-block; background: #333; padding: 3px 8px; border-radius:
+10px; margin: 2px; border: 1px solid #555; color: #fff; }
+.shop-item-row { display: flex; justify-content: space-between; align-items: center;
+margin-bottom: 5px; font-size: 0.85rem; }
+.shop-item-row button { width: auto; padding: 5px 10px; margin:0; }
+/* 튜토리얼 모달 전용 CSS */
+#tutorial-modal {
+display: none;
+position: absolute;
+top: 0; left: 0; width: 100%; height: 100%;
+background-color: rgba(10, 10, 10, 0.95);
+z-index: 300;
+box-sizing: border-box;
+padding: 30px;
+overflow-y: auto;
+text-align: left;
+border-radius: 10px;
+}
+#tutorial-modal h2 {
+color: #4CAF50;
+border-bottom: 2px dashed #4CAF50;
+padding-bottom: 10px;
+margin-top: 0;
+}
+#tutorial-modal h3 {
+color: #FFD700;
+margin-top: 20px;
+}
+#tutorial-modal ul {
+list-style-type: disc;
+padding-left: 20px;
+}
+#tutorial-modal li {margin-bottom: 15px;
+line-height: 1.5;
+}
+.mp-field { text-align: left; margin-bottom: 14px; }
+.mp-field label { display: block; font-size: 0.85rem; color: #aaa; margin-bottom: 5px; }
+.lobby-seat {
+display: flex; justify-content: space-between; align-items: center;
+padding: 10px; margin-bottom: 8px; border-radius: 5px;
+background-color: #2a2a2a; border: 1px solid #444;
+}
+.lobby-seat.filled { border-color: #4CAF50; }
+.lobby-seat.empty { color: #666; font-style: italic; }
+.lobby-seat .seat-ready { color: #4CAF50; font-weight: bold; font-size: 0.85rem; }
+.lobby-seat .seat-notready { color: #ff9800; font-size: 0.85rem; }
+#room-code-display {
+font-size: 1.6rem; font-weight: bold; color: #FFD700;
+letter-spacing: 4px; text-align: center; margin: 10px 0;
+}
+.vote-btn-like { background-color: #1e4620 !important; }
+.vote-btn-dislike { background-color: #4a1e1e !important; }
+</style>
+</head>
+<body>
+<div class="game-container">
+<!-- 튜토리얼 모달 -->
+<div id="tutorial-modal">
+<h2>📜 게임 설명 및 목표</h2>
+<p>본 게임은 고등학교 수준의 미시/거시 경제학 개념이 적용된 경제 생존
+시뮬레이션입니다.<br>급변하는 경제 지표와 정책 속에서 시장의 흐름을 분석하고 최적의
+판단을 내려 생존하세요.</p>
+<h3>[캐릭터별 특수 능력 및 우승 목표]</h3>
+<ul>
+<li><strong>학생</strong> <br><span style="color:#aaa; font-size:0.9rem;">- 능력:
+저축/투자, 대출, 물건 거래(사기/팔기), 개인챗</span><br><span style="color:#4CAF50;">-
+목표: 돈을 가장 많이 모으기 (180만원 달성 시 우승)</span></li>
+<li><strong>상점 주인</strong> <br><span style="color:#aaa; font-size:0.9rem;">-
+능력: 물건 가격 변동, 저축/투자, 대출, 개인챗</span><br><span style="color:#4CAF50;">-
+목표: 수요 파악을 통한 최대 이윤 남기기 (물품 30개 이상 판매 시 우승)</span></li>
+<li><strong>기자</strong> <br><span style="color:#aaa; font-size:0.9rem;">- 능력:
+기사 작성(라운드당 1회), 정보 거래, 물건 거래, 뱅킹</span><br><span
+style="color:#4CAF50;">- 목표: 예리한 기사를 써서 신뢰도 80점 달성하기 (좋아요당
++3점)</span></li>
+<li><strong>은행원</strong> <br><span style="color:#aaa; font-size:0.9rem;">-
+능력: 예금/대출 금리 설정, 물건 거래, 주식 투자, 개인챗</span><br><span
+style="color:#4CAF50;">- 목표: 2위 자산의 3배 이상 돈 모으기 (시장의 독점 은행장
+달성)</span></li>
+<li><strong>정부</strong> <br><span style="color:#aaa; font-size:0.9rem;">- 능력:
+세금 조정, 규제/긴급 정책 발표, 대국민 담화(전체 메시지)</span><br><span
+style="color:#4CAF50;">- 목표: 시장 경제 통제 및 파악 (1명이라도 파산자가 발생하면
+우승)</span></li>
+</ul>
+<p style="color:#ff3333; font-weight:bold; font-size:0.9rem;">※ 주의: 상황 설명에
+직접적인 정답 힌트는 주어지지 않습니다. 본인의 경제적 논리력을 총동원하여 매몰비용,
+수요탄력성, 거시정책의 파급 효과를 예측해야 합니다.</p>
+<button class="start-btn"
+onclick="document.getElementById('tutorial-modal').style.display='none'" style="width:100%;
+margin-top:20px;">숙지 완료 / 닫기</button>
+</div>
+<!-- 매 라운드 시작 시 나타나는 검은 화면 연출 -->
+<div id="black-screen">
+<h2 id="round-display-black"></h2>
+<div id="published-article-container" style="display:none; border:2px dashed #00bcd4;
+padding:15px; margin-bottom:20px; background-color:rgba(0, 188, 212, 0.1); width: 90%;
+box-sizing: border-box; text-align: left; border-radius: 8px;">
+<p style="margin:0; font-weight:bold; color:#00bcd4; font-size:1.1rem;">[지난 라운드
+기사 반응]</p>
+<p id="published-article-text" style="margin: 10px 0 15px 0; color:#fff; line-height: 1.4;
+background: #222; padding: 10px; border-radius: 5px;"></p>
+<div id="article-reactions" style="border-top: 1px solid #444; padding-top:
+10px;"></div>
+</div>
+<p style="color: #FFD700; font-size: 1.1rem; font-weight: bold; margin-bottom:
+10px;">[새로운 경제 상황 발생!]</p>
+<div id="situation-text" style="line-height: 1.6; color: #eee; margin-bottom: 40px;
+text-align: center;"></div>
+<button class="start-btn" style="margin-top: 0;" onclick="closeBlackScreen()">상황
+확인완료</button>
+</div>
+<h1>마을 경제 게임</h1>
+
+<!-- ===================== 1) 시작 화면 ===================== -->
+<div id="intro">
+<p>당신은 알 수 없는 마을에 도착했습니다.<br>실제 참가자들과 함께 무작위 직업을
+배정받아 경제 활동을 시작합니다.</p>
+<p style="font-size:0.85rem; color:#aaa;">각자의 목표를 달성하기 위해 자산을
+관리하고 거래하세요.</p>
+<button class="start-btn"
+onclick="document.getElementById('tutorial-modal').style.display='block'"
+style="background-color: #333; margin-top: 20px; width:100%; border:1px solid #555;">📜
+캐릭터 목표 및 게임 설명 보기</button>
+
+<div class="mp-field" style="margin-top:20px;">
+<label for="nickname-input">닉네임</label>
+<input type="text" id="nickname-input" placeholder="닉네임을 입력하세요" maxlength="12">
+</div>
+
+<button class="start-btn" style="width:100%;" onclick="handleCreateRoom()">방
+만들기</button>
+
+<div class="mp-field" style="margin-top:20px;">
+<label for="roomcode-input">방 번호 (6자리)</label>
+<input type="text" id="roomcode-input" placeholder="예: 582941" maxlength="6">
+</div>
+<button class="start-btn" style="width:100%; background-color:#03A9F4;"
+onclick="handleJoinRoom()">방 참가</button>
+
+<p id="intro-error-msg" style="color:#ff3333; font-size:0.85rem; min-height:1.2em;
+margin-top:10px;"></p>
+</div>
+
+<!-- ===================== 2) 대기실 화면 ===================== -->
+<div id="lobby" style="display:none; text-align:left;">
+<p style="text-align:center; color:#aaa; margin-bottom:0;">방 번호</p>
+<div id="room-code-display"></div>
+<p style="text-align:center; margin-top:0;"><span id="lobby-player-count">0/5</span> 명
+참가중</p>
+
+<div class="status-box">
+<div id="lobby-seats"></div>
+</div>
+
+<div class="action-btns">
+<button id="ready-btn" onclick="handleToggleReady()" style="width:100%;
+background-color:#03A9F4;">준비 완료</button>
+</div>
+<div class="action-btns">
+<button id="start-game-btn" onclick="handleStartGame()" style="display:none; width:100%;
+background-color:#4CAF50;">게임 시작 (방장)</button>
+</div>
+<p id="lobby-error-msg" style="color:#ff3333; font-size:0.85rem; text-align:center;
+min-height:1.2em;"></p>
+</div>
+
+<!-- ===================== 3) 최종 결과 화면 ===================== -->
+<div id="game-over-screen" style="display:none; text-align:left;">
+<h2 style="text-align:center; color:#ff3333;">게임 종료</h2>
+<div id="game-over-summary"></div>
+<button class="start-btn" style="width:100%;" onclick="location.reload()">처음으로</button>
+</div>
+
+<!-- 1라운드 최초 역할 배정 화면 -->
+<div id="game-ui">
+<div class="role-icon" id="role-icon">?</div>
+<div class="role-title" id="role-name"></div>
+<div class="status-box">
+<p><strong>내 자산:</strong> <span id="money-amount"></span></p>
+</div>
+<div class="status-box">
+<p><strong>[직업 특수 능력]</strong></p>
+<ul id="abilities-list"></ul>
+<div class="goal">목표: <span id="role-goal"></span></div></div>
+<div class="action-btns">
+<button onclick="goToNextPhase()" style="width: 100%; background-color:
+#4CAF50;">마을로 이동하기</button>
+</div>
+</div>
+
+<!-- 메인 행동 선택 화면 -->
+<div id="action-phase">
+<div class="status-box event-box">
+<h2 style="color: #ff9800; font-size: 1.2rem; text-align: center; margin-top: 0;"
+id="round-title"></h2>
+<p style="margin: 5px 0;"><strong>[현재 상황 요약]</strong></p>
+<p style="font-size: 0.95rem; color: #ff9800; margin: 5px 0; font-weight: bold;"
+id="current-situation-summary"></p>
+<p style="font-size: 0.85rem; color: #fff; margin: 5px 0 0 0;">
+현재 정부 세율: <span id="current-tax-display" style="color:red;
+font-weight:bold;"></span> | 대출 한도: <span id="current-loan-limit-display"
+style="color:yellow; font-weight:bold;"></span>
+</p>
+</div>
+
+<!-- 실시간 기사 투표 알림 -->
+<div id="article-notice-box" class="status-box" style="display:none; border-color:#00bcd4;">
+<p style="margin:0 0 8px 0; color:#00bcd4; font-weight:bold;">📰 <span
+id="article-notice-author"></span>의 새 기사</p>
+<p id="article-notice-text" style="margin:0 0 10px 0; background:#111; padding:8px;
+border-radius:5px;"></p>
+<div id="article-vote-buttons" class="action-btns">
+<button class="vote-btn-like" onclick="voteArticle('like')">👍 공감</button>
+<button class="vote-btn-dislike" onclick="voteArticle('dislike')">👎 비공감</button>
+</div>
+<p id="article-notice-voted-msg" style="display:none; color:#4CAF50; text-align:center;
+margin:0;">투표를 완료했습니다.</p>
+</div>
+
+<div class="main-layout">
+<div class="left-content" style="flex: 1;">
+<div class="status-box" id="ai-status" style="margin-bottom: 0; min-height:
+150px;"></div>
+</div>
+<div id="activity-log-container">
+<div style="color:#4CAF50; font-weight:bold; margin-bottom:5px;
+font-size:0.8em;">[실시간 마을 동향]</div>
+<div id="activity-log-content"></div>
+</div>
+</div>
+<div class="status-box" style="padding-bottom: 40px;">
+<p style="margin-top: 0; text-align: center;"><strong>무엇을
+하시겠습니까?</strong></p>
+<div class="action-btns column-btns" id="main-actions"></div>
+<div class="action-btns column-btns sub-menu" id="bank-menu">
+<div id="save-loan-section">
+<p style="text-align:center; margin:0 0 5px 0; color: #03A9F4;"><strong>예금
+금리: <span id="current-interest-display" style="color:#FFD700;
+font-size:1.2rem;"></span></strong></p>
+<div style="display:flex; gap:5px; margin-bottom: 10px;">
+<input type="number" id="save-input" placeholder="저축액(만)"
+style="margin:0;">
+<button onclick="saveMoney()" style="background-color:#03A9F4;
+border:none; width:30%; margin:0;">저축</button>
+</div>
+<p style="text-align:center; margin: 10px 0 5px 0; color: #ff9800;"><strong>대출
+금리: <span id="current-loan-rate-display" style="color:#FFD700;
+font-size:1.2rem;"></span></strong></p>
+<div style="display: flex; gap:5px; margin-bottom:5px;">
+<!-- ⚠️ 대출 한도 300만 제한 UI 추가 -->
+<input type="number" id="loan-input" placeholder="대출액(만) (최대300)" max="300"
+style="margin:0;">
+<button onclick="takeLoan()" style="background-color:#ff9800; border:none;
+width:30%; margin:0;">대출</button>
+</div>
+</div>
+<div id="banker-rate-section" style="display:none; margin-bottom:10px;
+border-bottom: 1px solid #555; padding-bottom: 10px;">
+<p style="text-align:center; margin:0 0 5px 0; color: #FFD700;"><strong>[은행장
+권한] 금리 설정</strong></p>
+<div style="display: flex; gap:5px; margin-bottom:5px;">
+<!-- ⚠️ 예금 금리 30% 제한 UI 추가 -->
+<input type="number" id="set-deposit-input" placeholder="예금 금리(%) (최대30)" max="30"
+style="margin:0;">
+<button onclick="setDepositRate()" style="background-color:#03A9F4;
+border:none; width:40%; margin:0;">설정</button>
+</div>
+<div style="display: flex; gap:5px; margin-bottom:5px;">
+<!-- ⚠️ 대출 금리 30% 제한 UI 추가 -->
+<input type="number" id="set-loan-input" placeholder="대출 금리(%) (최대30)" max="30"
+style="margin:0;">
+<button onclick="setLoanRate()" style="background-color:#ff9800;
+border:none; width:40%; margin:0;">설정</button>
+</div>
+</div>
+<p style="text-align:center; margin: 10px 0 5px 0; color: #ff3333;"><strong>주식
+시장(고위험/고수익)</strong></p>
+<div style="display: flex; gap:5px; margin-bottom:5px;">
+<input type="number" id="invest-input" placeholder="투자액(만)"
+style="margin:0;">
+<button onclick="investMoney()" style="background-color:#ff3333; border:none;
+width:30%; margin:0;">투자</button>
+</div>
+<button class="back-btn" onclick="backToMainActions()">돌아가기</button>
+</div>
+<div class="action-btns column-btns sub-menu" id="trade-menu">
+<div class="section-box" id="shop-section"></div>
+<div class="section-box" id="info-section" style="display:none;">
+<p style="text-align:center; margin:0 0 10px 0; color: #00bcd4;"><strong>정보원
+거래소</strong></p>
+<button onclick="buyInfo(1)">일반 동향 파악 (10만)</button>
+<button onclick="buyInfo(2)">섹터별 심층 분석 보고서 (20만)</button>
+<button onclick="buyInfo(3)">1급 거시경제 기밀 자료 (30만)</button>
+</div>
+<button class="back-btn" onclick="backToMainActions()">돌아가기</button>
+</div>
+<div class="action-btns column-btns sub-menu" id="chat-menu">
+<p style="text-align:center; margin:0 0 10px 0; color: #e91e63;"><strong>누구와
+대화하시겠습니까?</strong></p>
+<div id="chat-targets"></div>
+<button class="back-btn" onclick="backToMainActions()">돌아가기</button>
+</div>
+<div class="action-btns column-btns sub-menu" id="chat-room">
+<p style="text-align:center; margin:0 0 10px 0; color: #e91e63; font-weight:bold;"
+id="chat-room-title"></p>
+<div id="chat-history"></div>
+<div style="display: flex; gap:5px; margin-bottom:5px;">
+<input type="text" id="chat-input" placeholder="메시지를 입력..."
+style="width:75%; margin:0;">
+<button onclick="sendChatMessage()" style="background-color:#4CAF50;
+border:none; width:25%; margin:0; padding: 10px;">전송</button>
+</div>
+<div style="display: flex; gap:5px; margin-bottom:10px;">
+<input type="number" id="transfer-input" placeholder="송금액(만)"
+style="width:75%; margin:0; border-radius:5px; border: 1px solid #555;
+background-color:#121212; color:#fff;">
+<button onclick="transferMoney()" style="background-color:#ff9800;
+border:none; width:25%; margin:0; padding: 10px; color:#fff;
+font-weight:bold;">송금</button>
+</div>
+<button class="back-btn" onclick="closeChatRoom()" style="margin-top:0;">대화
+종료</button>
+</div>
+<div class="action-btns column-btns sub-menu" id="article-menu">
+<p style="text-align:center; margin:0 0 10px 0; color: #FFD700;"><strong>기사
+작성</strong></p>
+<textarea id="article-input" rows="4" placeholder="상황에 대한 사실과 의견을
+작성하세요..."></textarea>
+<button onclick="publishArticle()" style="background-color: #4CAF50; border:
+none;">발행하기</button>
+<button class="back-btn" onclick="backToMainActions()">돌아가기</button>
+</div>
+<div class="action-btns column-btns sub-menu" id="gov-policy-menu">
+<p style="text-align:center; margin:0 0 10px 0; color: #00bcd4;"><strong>국가
+정책 및 규제 관리</strong></p>
+<div class="section-box">
+<p style="margin:0 0 5px 0;"><strong>기본 세율 조정</strong></p>
+<div style="display: flex; gap:5px; margin-bottom:10px;">
+<!-- ⚠️ 세율 40% 제한 UI 추가 -->
+<input type="number" id="gov-tax-input" placeholder="세율(%) (최대40)" max="40"
+style="margin:0;">
+<button onclick="setTaxRate()" style="background-color:#00bcd4;
+border:none; width:40%; margin:0;">적용</button>
+</div>
+</div>
+<div class="section-box">
+<p style="margin:0 0 5px 0;"><strong>시장 규제</strong></p>
+<select id="gov-regulation-select">
+<option value="price_limit">인기상품 가격 상한제</option>
+<option value="ban_random_item">특정 물품 거래 전면 금지</option>
+<option value="loan_limit">가계 대출 한도 축소(30만)</option>
+<option value="lift_all">모든 규제 해제</option>
+</select>
+<button onclick="applyRegulation()" style="background-color:#ff9800;
+border:none; width: 100%;">규제 발표</button>
+</div>
+<div class="section-box">
+<p style="margin:0 0 5px 0;"><strong>긴급 경제 정책 (국고 사용)</strong></p>
+<button onclick="applyEmergencyPolicy('coupon')"
+style="margin-bottom:5px;">전 국민 소비쿠폰 지급 (-40만)</button>
+<button onclick="applyEmergencyPolicy('price_fix')"
+style="margin-bottom:5px;">모든 상점 가격 원가 동결</button>
+<button onclick="applyEmergencyPolicy('tax_hike')">한시적 특별 증세 (세율
+30%로 고정)</button>
+</div>
+<button class="back-btn" onclick="backToMainActions()">돌아가기</button>
+</div>
+<div class="action-btns column-btns sub-menu" id="gov-broadcast-menu">
+<p style="text-align:center; margin:0 0 10px 0; color: #ff3333;"><strong>대국민
+담화 발표</strong></p>
+<textarea id="broadcast-input" rows="4" placeholder="마을 전체에 전달할 정부의
+공식 메시지를 작성하세요..."></textarea>
+<button onclick="sendBroadcast()" style="background-color: #ff3333; border:
+none;">발표하기</button>
+<button class="back-btn" onclick="backToMainActions()">돌아가기</button>
+</div>
+</div>
+<button class="next-round-btn" id="next-round-btn" onclick="nextRound()">턴 종료 /
+다음 라운드</button>
+</div>
+</div>
+<script>
+const socket = io();
+
+socket.on("connect_error", (err) => {
+alert("서버에 연결하지 못했습니다.\n\n에러 내용: " + err.message + "\n\n서버(node server.js)가 실행 중인지, 다른 프로그램이 3000번 포트를 쓰고 있지는 않은지 확인해주세요.");
+});
+socket.io.on("reconnect_attempt", () => {
+console.log("재연결 시도중...");
+});
+
+window.addEventListener("error", (event) => {
+alert("스크립트 오류가 발생했습니다:\n\n" + event.message + "\n(파일: " + event.filename + ", 줄: " + event.lineno + ")");
+});
+
+const ROLE_ICONS = {
+"학생": "🎒", "상점 주인": "🏪", "기자": "📰", "은행원": "💼", "정부": "🏛"
+};
+
+let myRole = null;
+let myRoleInfo = null;
+let myMoney = 0;
+let myCredibility = 0;
+let mySavedMoney = 0;
+let myLoanedMoney = 0;
+let myInvestedMoney = 0;
+let myInventory = {};
+
+let currentRoomCode = null;
+let isHost = false;
+let roomPlayers = []; 
+let currentRound = 0;
+let totalRounds = 5;
+let currentSituation = null;
+let currentTaxRate = 0.10;
+let interestRate = 0.05;
+let loanRate = 0.10;
+let bannedItem = null;
+let maxLoanLimit = null;
+let currentShopPrices = {};
+let totalItemsSold = 0;
+let itemsList = [];
+
+let pendingRoundResult = null;
+let pendingArticleReveal = undefined;
+
+let currentChatTarget = null;
+let currentOpenMenu = null;
+let hasVotedThisArticle = false;
+
+function addLogEntry(roleName, message, customColor) {
+const logContent = document.getElementById('activity-log-content');
+if (!logContent) return;
+const entry = document.createElement('div');
+entry.className = 'log-entry';
+let color = "#aaa";
+if (roleName === "기자") color = "#FFD700";
+if (roleName === "상점 주인") color = "#ff9800";
+if (roleName === "은행원") color = "#03A9F4";
+if (roleName === "정부") color = "#ff3333";
+if (roleName === "시스템") color = "#4CAF50";
+if (customColor) color = customColor;
+entry.innerHTML = `<span style="color:${color}; font-weight:bold;">[${roleName}]</span> ${message}`;
+logContent.appendChild(entry);
+logContent.scrollTop = logContent.scrollHeight;
+}
+
+function handleCreateRoom() {
+const nickname = document.getElementById('nickname-input').value.trim();
+if (!nickname) return showIntroError("닉네임을 입력해주세요.");
+socket.emit("createRoom", { nickname });
+}
+
+function handleJoinRoom() {
+const nickname = document.getElementById('nickname-input').value.trim();
+const roomCode = document.getElementById('roomcode-input').value.trim();
+if (!nickname) return showIntroError("닉네임을 입력해주세요.");
+if (!roomCode || roomCode.length !== 6) return showIntroError("6자리 방 번호를 입력해주세요.");
+socket.emit("joinRoom", { roomCode, nickname });
+}
+
+function showIntroError(msg) {
+document.getElementById('intro-error-msg').innerText = msg;
+}
+
+socket.on("roomCreated", (data) => {
+currentRoomCode = data.roomCode;
+showLobby();
+});
+
+socket.on("roomJoined", (data) => {
+currentRoomCode = data.roomCode;
+showLobby();
+});
+
+socket.on("errorMessage", (data) => {
+if (document.getElementById('intro').style.display !== 'none') {
+showIntroError(data.message);
+} else if (document.getElementById('lobby').style.display !== 'none') {
+document.getElementById('lobby-error-msg').innerText = data.message;
+} else {
+alert(data.message);
+}
+});
+
+function showLobby() {
+document.getElementById('intro').style.display = 'none';
+document.getElementById('lobby').style.display = 'block';
+}
+
+function handleToggleReady() {
+socket.emit("toggleReady");
+}
+
+function handleStartGame() {
+socket.emit("startGame");
+}
+
+function renderLobby() {
+document.getElementById('room-code-display').innerText = currentRoomCode || "";
+document.getElementById('lobby-player-count').innerText = `${roomPlayers.length}/5`;
+
+const seatsDiv = document.getElementById('lobby-seats');
+seatsDiv.innerHTML = "";
+for (let i = 0; i < 5; i++) {
+const p = roomPlayers[i];
+const seat = document.createElement('div');
+if (p) {
+seat.className = 'lobby-seat filled';
+const readySpan = p.ready
+? `<span class="seat-ready">✔ 준비완료</span>`
+: `<span class="seat-notready">대기중</span>`;
+seat.innerHTML = `<span>${p.isHost ? '👑 ' : ''}${p.nickname}</span>${readySpan}`;
+} else {
+seat.className = 'lobby-seat empty';
+seat.innerText = "빈 자리";
+}
+seatsDiv.appendChild(seat);
+}
+
+const me = roomPlayers.find((p) => p.id === socket.id);
+const readyBtn = document.getElementById('ready-btn');
+if (me) {
+readyBtn.innerText = me.ready ? "준비 취소" : "준비 완료";
+}
+
+const startBtn = document.getElementById('start-game-btn');
+if (isHost) {
+startBtn.style.display = 'block';
+const allReady = roomPlayers.length > 0 && roomPlayers.every((p) => p.ready);
+startBtn.disabled = !allReady;
+} else {
+startBtn.style.display = 'none';
+}
+}
+
+socket.on("roomUpdate", (data) => {
+currentRoomCode = data.roomCode;
+isHost = data.host === socket.id;
+roomPlayers = data.players;
+currentRound = data.round;
+totalRounds = data.totalRounds;
+currentSituation = data.currentSituation;
+currentTaxRate = data.currentTax;
+interestRate = data.interestRate;
+loanRate = data.loanRate;
+bannedItem = data.bannedItem;
+maxLoanLimit = data.maxLoanLimit;
+currentShopPrices = data.currentShopPrices;
+totalItemsSold = data.totalItemsSold;
+itemsList = data.itemsList;
+
+if (!data.gameStarted && document.getElementById('lobby').style.display !== 'none') {
+renderLobby();
+}
+
+if (data.gameStarted && document.getElementById('action-phase').style.display !== 'none') {
+renderStatusPanel();
+refreshCurrentMenu();
+}
+});
+
+socket.on("gameStarted", (data) => {
+myRole = data.role;
+myRoleInfo = data.roleInfo;
+myMoney = data.money;
+myCredibility = data.credibility;
+currentRound = data.round;
+totalRounds = data.totalRounds;
+currentSituation = data.situation;
+
+document.getElementById('lobby').style.display = 'none';
+
+document.getElementById('round-display-black').innerText = `ROUND ${currentRound + 1}`;
+document.getElementById('situation-text').innerHTML = currentSituation.desc;
+document.getElementById('published-article-container').style.display = 'none';
+document.getElementById('black-screen').style.display = 'flex';
+});
+
+function closeBlackScreen() {
+document.getElementById('black-screen').style.display = 'none';
+document.getElementById('activity-log-container').style.display = 'block';
+
+if (currentRound === 0 && document.getElementById('action-phase').style.display === 'none') {
+document.getElementById('game-ui').style.display = 'block';
+document.getElementById('role-icon').innerText = myRoleInfo.icon;
+document.getElementById('role-name').innerText = myRole;
+document.getElementById('money-amount').innerText = myMoney + "만원";
+document.getElementById('role-goal').innerText = myRoleInfo.goal;
+const abilitiesList = document.getElementById('abilities-list');
+abilitiesList.innerHTML = "";
+myRoleInfo.abilities.forEach((ability) => {
+const li = document.createElement('li');
+li.innerText = ability;
+abilitiesList.appendChild(li);
+});
+} else {
+goToNextPhase();
+}
+}
+
+function goToNextPhase() {
+document.getElementById('game-ui').style.display = 'none';
+document.getElementById('action-phase').style.display = 'block';
+document.getElementById('round-title').innerText = `ROUND ${currentRound + 1}`;
+document.getElementById('current-situation-summary').innerText = currentSituation.summary;
+hasVotedThisArticle = false;
+document.getElementById('article-notice-box').style.display = 'none';
+renderStatusPanel();
+renderMainActions();
+backToMainActions();
+}
+
+socket.on("moneyUpdate", (data) => {
+myMoney = data.money;
+myCredibility = data.credibility;
+mySavedMoney = data.savedMoney;
+myLoanedMoney = data.loanedMoney;
+myInvestedMoney = data.investedMoney;
+myInventory = data.inventory;
+
+if (document.getElementById('action-phase').style.display !== 'none') {
+renderStatusPanel();
+refreshCurrentMenu();
+}
+});
+
+socket.on("logUpdate", (data) => {
+addLogEntry(data.roleName, data.message, data.color);
+});
+
+function renderStatusPanel() {
+const aiStatus = document.getElementById('ai-status');
+if (!aiStatus) return;
+
+let myStatusStr = `(현금: <span style="color:#fff; font-weight:bold;">${myMoney}만</span>`;
+if (myRole === "기자") myStatusStr += ` / 신뢰도: <span style="color:#00bcd4;">${myCredibility}</span>/80`;
+if (myRole !== "정부") {
+myStatusStr += `)<br>저축: ${mySavedMoney}만 / 대출: ${myLoanedMoney}만 / 주식: ${myInvestedMoney}만`;
+} else {
+myStatusStr += ')';
+}
+
+let html = "<p style='margin-top:0; color:#FFD700;'><strong>[마을 참가자 현황]</strong></p><ul style='list-style-type: none; padding-left:0;'>";
+html += `<li style="margin-bottom: 8px;"><strong>나:</strong> ${myRoleInfo.icon} ${myRole} <br> <span style="font-size:0.9rem; color:#aaa;">${myStatusStr}</span></li>`;
+
+roomPlayers.forEach((p) => {
+if (p.id === socket.id) return;
+const statusLabel = p.alive === false ? " (파산)" : "";
+html += `<li style="margin-bottom: 4px; color:#aaa;"><strong>${p.nickname}:</strong> ${p.roleIcon || ''} ${p.role || '역할 미배정'}${statusLabel}</li>`;
+});
+html += "</ul>";
+
+if (myRole !== "정부") {
+let invenHTML = "<div class='inventory-list'><strong>내 인벤토리:</strong>";
+let hasItem = false;
+for (const [item, count] of Object.entries(myInventory || {})) {
+if (count > 0) {
+invenHTML += `<span class='inventory-item'>${item} x${count}</span>`;
+hasItem = true;
+}
+}
+if (!hasItem) invenHTML += " 비어있음";
+invenHTML += "</div>";
+aiStatus.innerHTML = html + invenHTML;
+} else {
+aiStatus.innerHTML = html;
+}
+
+document.getElementById('current-interest-display').innerText = Math.floor(interestRate * 100) + "%";
+document.getElementById('current-loan-rate-display').innerText = Math.floor(loanRate * 100) + "%";
+document.getElementById('current-tax-display').innerText = Math.floor(currentTaxRate * 100) + "%";
+document.getElementById('current-loan-limit-display').innerText = (maxLoanLimit === null || maxLoanLimit === undefined) ? "무제한" : maxLoanLimit + "만";
+}
+
+function renderMainActions() {
+const actionsDiv = document.getElementById('main-actions');
+actionsDiv.innerHTML = "";
+const chatBtn = `<button onclick="openChatMenu()" style="border-color: #e91e63; color: #e91e63;">개인챗 하기</button>`;
+
+if (myRole === "정부") {
+const govPolicyBtn = `<button onclick="openGovPolicyMenu()" style="border-color: #00bcd4; color: #00bcd4;">정책 및 규제</button>`;
+const govBroadcastBtn = `<button onclick="openGovBroadcastMenu()" style="border-color: #ff3333; color: #ff3333;">대국민 담화</button>`;
+actionsDiv.innerHTML += govPolicyBtn + govBroadcastBtn + chatBtn;
+} else {
+const tradeBtn = `<button onclick="openTradeMenu()">거래하기 (물건/정보)</button>`;
+const bankBtn = `<button onclick="openBankMenu()" style="border-color: #03A9F4; color: #03A9F4;">뱅킹/주식</button>`;
+actionsDiv.innerHTML += tradeBtn + chatBtn + bankBtn;
+if (myRole === "기자") {
+actionsDiv.innerHTML += `<button onclick="openAbilityMenu()" style="border-color: #FFD700; color: #FFD700;">기사 작성</button>`;
+}
+}
+}
+
+function hideAllSubMenus() {
+document.getElementById('main-actions').style.display = 'none';
+document.getElementById('bank-menu').style.display = 'none';
+document.getElementById('trade-menu').style.display = 'none';
+document.getElementById('chat-menu').style.display = 'none';
+document.getElementById('chat-room').style.display = 'none';
+document.getElementById('article-menu').style.display = 'none';
+document.getElementById('gov-policy-menu').style.display = 'none';
+document.getElementById('gov-broadcast-menu').style.display = 'none';
+}
+
+function backToMainActions() {
+hideAllSubMenus();
+currentOpenMenu = null;
+document.getElementById('main-actions').style.display = 'flex';
+}
+
+function refreshCurrentMenu() {
+if (currentOpenMenu === 'trade') openTradeMenu();
+else if (currentOpenMenu === 'bank') openBankMenu();
+}
+
+function openBankMenu() {
+hideAllSubMenus();
+currentOpenMenu = 'bank';
+document.getElementById('bank-menu').style.display = 'flex';
+if (myRole === "은행원") {
+document.getElementById('save-loan-section').style.display = 'none';
+document.getElementById('banker-rate-section').style.display = 'block';
+} else {
+document.getElementById('save-loan-section').style.display = 'block';
+document.getElementById('banker-rate-section').style.display = 'none';
+}
+}
+
+function openAbilityMenu() {
+hideAllSubMenus();
+currentOpenMenu = 'article';
+document.getElementById('article-menu').style.display = 'flex';
+}
+
+function openGovPolicyMenu() {
+hideAllSubMenus();
+currentOpenMenu = 'gov-policy';
+document.getElementById('gov-policy-menu').style.display = 'flex';
+}
+
+function openGovBroadcastMenu() {
+hideAllSubMenus();
+currentOpenMenu = 'gov-broadcast';
+document.getElementById('gov-broadcast-menu').style.display = 'flex';
+}
+
+function openTradeMenu() {
+hideAllSubMenus();
+currentOpenMenu = 'trade';
+document.getElementById('trade-menu').style.display = 'flex';
+document.getElementById('info-section').style.display = (myRole === '기자') ? 'block' : 'none';
+
+let shopHtml = '<p style="text-align:center; margin:0 0 10px 0; color: #4CAF50;"><strong>상점 물건 거래</strong></p>';
+if (bannedItem) {
+shopHtml += `<p style="color:#ff3333; font-weight:bold; font-size:0.85rem; text-align:center;">정부 규제: '${bannedItem}' 거래 금지</p>`;
+}
+
+itemsList.forEach((item) => {
+const price = currentShopPrices[item.name];
+const isEssential = currentSituation && item.name === currentSituation.itemName;
+const mark = isEssential ? "<span style='color:red; font-weight:bold;'>[수요 급증!]</span> " : "";
+const isBanned = item.name === bannedItem;
+
+if (myRole === "상점 주인") {
+const disableStr = isBanned ? "disabled" : "";
+// ⚠️ 상점 가격 35만 제한 UI 추가
+shopHtml += `<div class="shop-item-row">
+<span>${mark}${item.name} (원가 ${item.basePrice}만)</span>
+<div style="display: flex; gap:5px;">
+<input type="number" id="price_${item.name}" value="${price}" max="35" placeholder="최대 35" style="width:70px; margin:0; padding:2px;" ${disableStr}>
+<button onclick="changePrice('${item.name}')" ${disableStr}>${isBanned ? '금지됨' : '가격변경'}</button>
+</div>
+</div>`;
+} else {
+const tax = Math.max(1, Math.floor(price * currentTaxRate));
+const disableStr = isBanned ? "disabled" : "";
+shopHtml += `<div class="shop-item-row">
+<span style="${isBanned ? 'text-decoration:line-through; color:#777;' : ''}">${mark}${item.name}</span>
+<span>${price}만 <span style="color:#ff3333; font-size:0.75rem;">(+세금 ${tax}만)</span>
+<button onclick="buyItem('${item.name}')" ${disableStr}>${isBanned ? '금지됨' : '구매'}</button></span>
+</div>`;
+}
+});
+
+if (myRole !== "상점 주인") {
+let inventoryHtml = '<p style="text-align:center; margin: 15px 0 10px 0; color: #FF9800;"><strong>내 물건 팔기 (세금 차감 후 수령)</strong></p>';
+let hasInventoryToSell = false;
+for (const [item, count] of Object.entries(myInventory || {})) {
+if (count > 0) {
+hasInventoryToSell = true;
+const sellPrice = currentShopPrices[item];
+const tax = Math.max(1, Math.floor(sellPrice * currentTaxRate));
+const netEarnings = sellPrice - tax;
+const isBanned = item === bannedItem;
+const disableStr = isBanned ? "disabled" : "";
+inventoryHtml += `<div class="shop-item-row">
+<span style="${isBanned ? 'text-decoration:line-through; color:#777;' : ''}">${item} (보유: ${count}개)</span>
+<span>판매시 ${netEarnings}만 <button onclick="sellItem('${item}')" style="background-color:#FF9800;" ${disableStr}>${isBanned ? '금지됨' : '팔기'}</button></span>
+</div>`;
+}
+}
+if (!hasInventoryToSell) {
+inventoryHtml += '<p style="font-size:0.85rem; color:#aaa; text-align:center;">팔 물건이 없습니다.</p>';
+}
+shopHtml += inventoryHtml;
+}
+
+document.getElementById('shop-section').innerHTML = shopHtml;
+}
+
+function openChatMenu() {
+hideAllSubMenus();
+currentOpenMenu = 'chat';
+document.getElementById('chat-menu').style.display = 'flex';
+let targetsHtml = "";
+roomPlayers.forEach((p) => {
+if (p.id === socket.id) return;
+targetsHtml += `<button onclick="chatWith('${p.id}', '${p.nickname.replace(/'/g, "")}')" style="margin-bottom:5px; width:100%; border-color:#e91e63;">${p.roleIcon || ''} ${p.nickname} (${p.role || '?'})와 대화하기</button>`;
+});
+document.getElementById('chat-targets').innerHTML = targetsHtml || "<p style='text-align:center; color:#aaa;'>대화할 상대가 없습니다.</p>";
+}
+
+// =================================================================================
+// 🚨 추가된 밸런스 패치(방어 코드) 🚨
+// =================================================================================
+function saveMoney() {
+const val = parseInt(document.getElementById('save-input').value, 10);
+if (isNaN(val) || val <= 0 || val > myMoney) return alert("금액을 확인해주세요.");
+socket.emit("saveMoney", { amount: val });
+document.getElementById('save-input').value = "";
+}
+
+function takeLoan() {
+const val = parseInt(document.getElementById('loan-input').value, 10);
+if (isNaN(val) || val <= 0) return alert("금액을 확인해주세요.");
+if (val > 300) return alert("⚠️ 무리한 대출 방지: 대출은 최대 300만원까지만 가능합니다."); // 밸런스 패치
+socket.emit("takeLoan", { amount: val });
+document.getElementById('loan-input').value = "";
+}
+
+function investMoney() {
+const val = parseInt(document.getElementById('invest-input').value, 10);
+if (isNaN(val) || val <= 0 || val > myMoney) return alert("금액을 확인해주세요.");
+socket.emit("investMoney", { amount: val });
+document.getElementById('invest-input').value = "";
+}
+
+function setDepositRate() {
+const val = parseFloat(document.getElementById('set-deposit-input').value);
+if (isNaN(val) || val < 0) return alert("올바른 금리를 입력하세요.");
+if (val > 30) return alert("⚠️ 경제 마비 방지: 금리는 최대 30%까지만 설정할 수 있습니다."); // 밸런스 패치
+socket.emit("setDepositRate", { rate: val });
+document.getElementById('set-deposit-input').value = "";
+}
+
+function setLoanRate() {
+const val = parseFloat(document.getElementById('set-loan-input').value);
+if (isNaN(val) || val < 0) return alert("올바른 금리를 입력하세요.");
+if (val > 30) return alert("⚠️ 경제 마비 방지: 금리는 최대 30%까지만 설정할 수 있습니다."); // 밸런스 패치
+socket.emit("setLoanRate", { rate: val });
+document.getElementById('set-loan-input').value = "";
+}
+
+function changePrice(itemName) {
+const newPrice = parseInt(document.getElementById(`price_${itemName}`).value, 10);
+if (isNaN(newPrice) || newPrice <= 0) return alert("올바른 가격을 입력하세요.");
+if (newPrice > 35) return alert("⚠️ 폭리 방지: 상점 가격은 최대 35만원까지만 설정할 수 있습니다."); // 밸런스 패치
+socket.emit("changePrice", { itemName, price: newPrice });
+}
+
+function setTaxRate() {
+const val = parseFloat(document.getElementById('gov-tax-input').value);
+if (isNaN(val) || val < 0) return alert("올바른 세율을 입력하세요.");
+if (val > 40) return alert("⚠️ 시장 동결 방지: 세율은 최대 40%까지만 설정할 수 있습니다."); // 밸런스 패치
+socket.emit("setTaxRate", { rate: val });
+document.getElementById('gov-tax-input').value = "";
+}
+// =================================================================================
+
+function buyItem(itemName) {
+socket.emit("buyItem", { itemName });
+}
+
+function sellItem(itemName) {
+socket.emit("sellItem", { itemName });
+}
+
+function buyInfo(level) {
+socket.emit("buyInfo", { level });
+}
+
+socket.on("infoPurchased", (data) => {
+alert(`[기밀 정보획득]\n${data.info}`);
+});
+
+function chatWith(targetId, nickname) {
+document.getElementById('chat-menu').style.display = 'none';
+document.getElementById('chat-room').style.display = 'flex';
+currentOpenMenu = 'chat-room';
+currentChatTarget = targetId;
+document.getElementById('chat-room-title').innerText = `'${nickname}'와의 비밀 대화방`;
+document.getElementById('chat-history').innerHTML = "";
+}
+
+function closeChatRoom() {
+document.getElementById('chat-room').style.display = 'none';
+document.getElementById('main-actions').style.display = 'flex';
+currentChatTarget = null;
+currentOpenMenu = null;
+}
+
+function sendChatMessage() {
+const msg = document.getElementById('chat-input').value.trim();
+if (!msg || !currentChatTarget) return;
+socket.emit("chatMessage", { targetId: currentChatTarget, message: msg });
+document.getElementById('chat-input').value = "";
+}
+
+function transferMoney() {
+const amt = parseInt(document.getElementById('transfer-input').value, 10);
+if (isNaN(amt) || amt <= 0 || amt > myMoney) return alert("금액을 확인해주세요.");
+if (!currentChatTarget) return;
+socket.emit("transferMoney", { targetId: currentChatTarget, amount: amt });
+document.getElementById('transfer-input').value = "";
+}
+
+socket.on("privateChat", (data) => {
+if (data.fromId !== currentChatTarget && data.toId !== currentChatTarget) return;
+if (document.getElementById('chat-room').style.display === 'none') return;
+const history = document.getElementById('chat-history');
+const isMine = data.fromId === socket.id;
+const bubbleClass = isMine ? 'chat-msg my-msg' : 'chat-msg';
+const label = isMine ? '' : `<strong>${data.fromNickname}:</strong> `;
+history.innerHTML += `<div class="${bubbleClass}">${label}${data.message}</div>`;
+history.scrollTop = history.scrollHeight;
+});
+
+socket.on("moneyTransferred", (data) => {
+if (document.getElementById('chat-room').style.display === 'none') return;
+if (data.fromId !== currentChatTarget && data.toId !== currentChatTarget) return;
+const history = document.getElementById('chat-history');
+const isMine = data.fromId === socket.id;
+const msg = isMine
+? `${data.amount}만원을 송금했습니다.`
+: `${data.fromNickname}님이 ${data.amount}만원을 보냈습니다.`;
+history.innerHTML += `<div class="chat-msg" style="background-color:#b78a00;">${msg}</div>`;
+history.scrollTop = history.scrollHeight;
+});
+
+function publishArticle() {
+const text = document.getElementById('article-input').value.trim();
+if (text.length < 5) return alert("기사 내용이 너무 짧습니다.");
+socket.emit("publishArticle", { text });
+document.getElementById('article-input').value = "";
+backToMainActions();
+}
+
+function voteArticle(vote) {
+if (hasVotedThisArticle) return;
+socket.emit("voteArticle", { vote });
+hasVotedThisArticle = true;
+document.getElementById('article-vote-buttons').style.display = 'none';
+document.getElementById('article-notice-voted-msg').style.display = 'block';
+}
+
+socket.on("articleUpdate", (data) => {
+if (data.published) {
+if (data.authorId !== socket.id && document.getElementById('action-phase').style.display !== 'none') {
+hasVotedThisArticle = false;
+document.getElementById('article-notice-author').innerText = data.authorNickname;
+document.getElementById('article-notice-text').innerText = data.text;
+document.getElementById('article-vote-buttons').style.display = 'flex';
+document.getElementById('article-notice-voted-msg').style.display = 'none';
+document.getElementById('article-notice-box').style.display = 'block';
+}
+} else if (data.reveal !== undefined) {
+pendingArticleReveal = data.reveal;
+tryShowRoundTransition();
+}
+});
+
+function applyRegulation() {
+const type = document.getElementById('gov-regulation-select').value;
+socket.emit("applyRegulation", { type });
+}
+
+function applyEmergencyPolicy(type) {
+socket.emit("applyEmergencyPolicy", { type });
+}
+
+function sendBroadcast() {
+const text = document.getElementById('broadcast-input').value.trim();
+if (text.length < 5) return alert("담화문 내용이 너무 짧습니다.");
+socket.emit("broadcast", { message: text });
+document.getElementById('broadcast-input').value = "";
+backToMainActions();
+}
+
+let pendingNewRound = null;
+
+function nextRound() {
+socket.emit("nextRound");
+document.getElementById('next-round-btn').disabled = true;
+document.getElementById('next-round-btn').innerText = "다른 플레이어를 기다리는 중...";
+}
+
+socket.on("roundResult", (data) => {
+pendingRoundResult = data;
+tryShowRoundTransition();
+});
+
+socket.on("roundStarted", (data) => {
+pendingNewRound = data;
+tryShowRoundTransition();
+});
+
+function tryShowRoundTransition() {
+if (!pendingRoundResult || !pendingNewRound) return;
+
+if (pendingRoundResult.messages && pendingRoundResult.messages.length > 0) {
+alert(`[ROUND ${pendingRoundResult.round} 경제 지표 결산]\n\n${pendingRoundResult.messages.join("\n")}\n\n현재 보유 자본: ${pendingRoundResult.money}만원`);
+}
+
+currentRound = pendingNewRound.round;
+totalRounds = pendingNewRound.totalRounds;
+currentSituation = pendingNewRound.situation;
+
+const articleContainer = document.getElementById('published-article-container');
+if (pendingArticleReveal) {
+document.getElementById('published-article-text').innerHTML =
+`<span style="color:#aaa; font-size:0.9rem;">[${pendingArticleReveal.authorNickname}가 작성한 기사 내용]</span><br><strong style="font-size:1.05rem;">"${pendingArticleReveal.text}"</strong>`;
+let reactionHTML = `<p style='margin: 10px 0 5px 0; font-size: 0.85rem; color: #aaa;'>[여론 투표 결과]</p><ul style='list-style:none; padding:0; margin:0;'>`;
+pendingArticleReveal.reactions.forEach((r) => {
+const color = r.vote === 'like' ? '#4CAF50' : '#ff3333';
+const label = r.vote === 'like' ? '공감' : '비공감';
+reactionHTML += `<li style='margin-bottom:3px;'>${ROLE_ICONS[r.role] || ''} ${r.role}: <span style='color:${color}; font-weight:bold;'>${label}</span></li>`;
+});
+reactionHTML += "</ul>";
+reactionHTML += `<div style='margin-top:10px; color:#00bcd4; font-weight:bold;'>공감 ${pendingArticleReveal.likes}개로 신뢰도가 총 ${pendingArticleReveal.votePoints} 상승했습니다! (현재 신뢰도: ${pendingArticleReveal.newCredibility}/80)</div>`;
+document.getElementById('article-reactions').innerHTML = reactionHTML;
+articleContainer.style.display = 'block';
+} else {
+articleContainer.style.display = 'none';
+}
+
+document.getElementById('action-phase').style.display = 'none';
+document.getElementById('activity-log-container').style.display = 'none';
+document.getElementById('round-display-black').innerText = `ROUND ${currentRound + 1}`;
+document.getElementById('situation-text').innerHTML = currentSituation.desc;
+document.getElementById('black-screen').style.display = 'flex';
+
+document.getElementById('next-round-btn').disabled = false;
+document.getElementById('next-round-btn').innerText = "턴 종료 / 다음 라운드";
+
+pendingRoundResult = null;
+pendingNewRound = null;
+pendingArticleReveal = undefined;
+}
+
+socket.on("gameOver", (data) => {
+document.getElementById('black-screen').style.display = 'none';
+document.getElementById('action-phase').style.display = 'none';
+document.getElementById('game-ui').style.display = 'none';
+
+const me = data.summary.find((s) => s.id === socket.id);
+let html = "";
+data.summary.forEach((s) => {
+const mine = s.id === socket.id;
+const resultColor = s.achieved ? '#4CAF50' : '#ff3333';
+const resultLabel = s.achieved ? '목표 달성 성공 ✔' : '목표 달성 실패';
+html += `<div class="status-box" style="${mine ? 'border-color:#FFD700;' : ''}">
+<p style="margin:0 0 5px 0;"><strong>${mine ? '⭐ 나' : s.nickname}</strong> - ${ROLE_ICONS[s.role] || ''} ${s.role}</p>
+<p style="margin:0; font-size:0.9rem; color:#ccc;">${s.detail}</p>
+<p style="margin:5px 0 0 0; font-weight:bold; color:${resultColor};">${resultLabel}</p>
+</div>`;
+});
+
+document.getElementById('game-over-summary').innerHTML = html;
+document.getElementById('game-over-screen').style.display = 'block';
+});
+
+socket.on("disconnect", () => {
+addLogEntry("시스템", "서버와의 연결이 끊어졌습니다. 재접속을 시도합니다...", "#ff3333");
+});
+
+socket.io.on("reconnect", () => {
+addLogEntry("시스템", "서버에 다시 연결되었습니다.", "#4CAF50");
+});
+</script>
+</body>
+</html>
