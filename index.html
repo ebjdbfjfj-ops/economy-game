@@ -648,20 +648,62 @@ none;">발표하기</button>
  */
 const socket = io();
 
-// ---- 진단용 방어 코드 ----
-// 지금까지 "버튼을 눌러도 아무 반응이 없다"는 문제는 대부분 콘솔에만 에러가 찍히고
-// 화면에는 아무것도 안 보여서 원인을 알기 어려운 경우입니다.
-// 아래 코드는 연결 실패/런타임 에러가 발생하면 alert로 즉시 원인을 보여줍니다.
-socket.on("connect_error", (err) => {
-alert("서버에 연결하지 못했습니다.\n\n에러 내용: " + err.message + "\n\n서버(node server.js)가 실행 중인지, 다른 프로그램이 3000번 포트를 쓰고 있지는 않은지 확인해주세요.");
+// ---- 연결 상태 표시용 배너 ----
+// Render 같은 무료 호스팅은 한동안 접속이 없으면 서버가 잠들고, 새 방문자가
+// 들어오면 다시 깨어나는 데 몇십 초가 걸릴 수 있습니다. 그 사이에 연결이 잠깐
+// 실패해도 alert()로 화면을 막아버리면 "버튼이 안 눌린다"처럼 보이므로,
+// 대신 화면 상단에 조용한 안내 배너만 띄우고 socket.io가 자동으로 재연결하도록 둡니다.
+let isSocketConnected = false;
+
+function ensureConnectionBanner() {
+let banner = document.getElementById('connection-banner');
+if (!banner) {
+banner = document.createElement('div');
+banner.id = 'connection-banner';
+banner.style.cssText = "display:none; position:fixed; top:0; left:0; width:100%; z-index:9999; text-align:center; padding:8px 12px; font-size:0.85rem; color:#fff; background:#b45309;";
+document.body.prepend(banner);
+}
+return banner;
+}
+
+function setConnectionBanner(msg) {
+const banner = ensureConnectionBanner();
+if (!msg) {
+banner.style.display = 'none';
+} else {
+banner.innerText = msg;
+banner.style.display = 'block';
+}
+}
+
+socket.on("connect", () => {
+isSocketConnected = true;
+setConnectionBanner(null);
 });
+
+socket.on("connect_error", (err) => {
+isSocketConnected = false;
+console.error("연결 오류:", err.message);
+setConnectionBanner("서버에 연결하는 중입니다... (서버가 깨어나는 중일 수 있어요, 잠시만 기다려주세요)");
+});
+
+socket.on("disconnect", () => {
+isSocketConnected = false;
+setConnectionBanner("서버와 연결이 끊겼습니다. 재연결을 시도하는 중입니다...");
+});
+
 socket.io.on("reconnect_attempt", () => {
 console.log("재연결 시도중...");
 });
 
-// onclick으로 호출되는 함수들에서 예외가 나면 콘솔이 아니라 alert로 바로 보여주기 위한 래퍼
+socket.io.on("reconnect", () => {
+isSocketConnected = true;
+setConnectionBanner(null);
+});
+
+// 스크립트 오류는 alert로 화면을 막지 않고 콘솔에만 기록합니다.
 window.addEventListener("error", (event) => {
-alert("스크립트 오류가 발생했습니다:\n\n" + event.message + "\n(파일: " + event.filename + ", 줄: " + event.lineno + ")");
+console.error("스크립트 오류:", event.message, event.filename, event.lineno);
 });
 
 // 역할별 아이콘 (표시용. 게임 로직에는 사용하지 않음)
@@ -732,6 +774,9 @@ logContent.scrollTop = logContent.scrollHeight;
 function handleCreateRoom() {
 const nickname = document.getElementById('nickname-input').value.trim();
 if (!nickname) return showIntroError("닉네임을 입력해주세요.");
+if (!isSocketConnected) {
+showIntroError("서버에 연결하는 중입니다. 잠시 후 다시 눌러주세요. (서버가 깨어나는 데 몇십 초 걸릴 수 있어요)");
+}
 socket.emit("createRoom", { nickname });
 }
 
@@ -740,6 +785,9 @@ const nickname = document.getElementById('nickname-input').value.trim();
 const roomCode = document.getElementById('roomcode-input').value.trim();
 if (!nickname) return showIntroError("닉네임을 입력해주세요.");
 if (!roomCode || roomCode.length !== 6) return showIntroError("6자리 방 번호를 입력해주세요.");
+if (!isSocketConnected) {
+showIntroError("서버에 연결하는 중입니다. 잠시 후 다시 눌러주세요. (서버가 깨어나는 데 몇십 초 걸릴 수 있어요)");
+}
 socket.emit("joinRoom", { roomCode, nickname });
 }
 
