@@ -295,6 +295,8 @@ padding-left: 20px;
 #tutorial-modal li {margin-bottom: 15px;
 line-height: 1.5;
 }
+/* ===== 아래는 멀티플레이(방생성/대기실) 화면을 위해 추가된 최소한의 스타일입니다.
+     기존 디자인 톤(다크 배경 + 초록 포인트)을 그대로 따릅니다. ===== */
 .mp-field { text-align: left; margin-bottom: 14px; }
 .mp-field label { display: block; font-size: 0.85rem; color: #aaa; margin-bottom: 5px; }
 .lobby-seat {
@@ -353,6 +355,7 @@ margin-top:20px;">숙지 완료 / 닫기</button>
 <!-- 매 라운드 시작 시 나타나는 검은 화면 연출 -->
 <div id="black-screen">
 <h2 id="round-display-black"></h2>
+<!-- 기자가 작성한 기사 및 반응 구역 (모든 플레이어에게 라운드 종료 시 공개) -->
 <div id="published-article-container" style="display:none; border:2px dashed #00bcd4;
 padding:15px; margin-bottom:20px; background-color:rgba(0, 188, 212, 0.1); width: 90%;
 box-sizing: border-box; text-align: left; border-radius: 8px;">
@@ -372,7 +375,7 @@ text-align: center;"></div>
 </div>
 <h1>마을 경제 게임</h1>
 
-<!-- ===================== 1) 시작 화면 ===================== -->
+<!-- ===================== 1) 시작 화면: 닉네임 + 방 생성/참가 ===================== -->
 <div id="intro">
 <p>당신은 알 수 없는 마을에 도착했습니다.<br>실제 참가자들과 함께 무작위 직업을
 배정받아 경제 활동을 시작합니다.</p>
@@ -464,7 +467,7 @@ style="color:yellow; font-weight:bold;"></span>
 </p>
 </div>
 
-<!-- 실시간 기사 투표 알림 -->
+<!-- 실시간 기사 투표 알림 (기자가 기사를 발행하면 여기 나타남) -->
 <div id="article-notice-box" class="status-box" style="display:none; border-color:#00bcd4;">
 <p style="margin:0 0 8px 0; color:#00bcd4; font-weight:bold;">📰 <span
 id="article-notice-author"></span>의 새 기사</p>
@@ -508,8 +511,7 @@ border:none; width:30%; margin:0;">저축</button>
 금리: <span id="current-loan-rate-display" style="color:#FFD700;
 font-size:1.2rem;"></span></strong></p>
 <div style="display: flex; gap:5px; margin-bottom:5px;">
-<!-- ⚠️ 대출 한도 300만 제한 UI 추가 -->
-<input type="number" id="loan-input" placeholder="대출액(만) (최대300)" max="300"
+<input type="number" id="loan-input" placeholder="대출액(만)"
 style="margin:0;">
 <button onclick="takeLoan()" style="background-color:#ff9800; border:none;
 width:30%; margin:0;">대출</button>
@@ -520,15 +522,13 @@ border-bottom: 1px solid #555; padding-bottom: 10px;">
 <p style="text-align:center; margin:0 0 5px 0; color: #FFD700;"><strong>[은행장
 권한] 금리 설정</strong></p>
 <div style="display: flex; gap:5px; margin-bottom:5px;">
-<!-- ⚠️ 예금 금리 30% 제한 UI 추가 -->
-<input type="number" id="set-deposit-input" placeholder="예금 금리(%) (최대30)" max="30"
+<input type="number" id="set-deposit-input" placeholder="예금 금리(%)"
 style="margin:0;">
 <button onclick="setDepositRate()" style="background-color:#03A9F4;
 border:none; width:40%; margin:0;">설정</button>
 </div>
 <div style="display: flex; gap:5px; margin-bottom:5px;">
-<!-- ⚠️ 대출 금리 30% 제한 UI 추가 -->
-<input type="number" id="set-loan-input" placeholder="대출 금리(%) (최대30)" max="30"
+<input type="number" id="set-loan-input" placeholder="대출 금리(%)"
 style="margin:0;">
 <button onclick="setLoanRate()" style="background-color:#ff9800;
 border:none; width:40%; margin:0;">설정</button>
@@ -597,8 +597,7 @@ none;">발행하기</button>
 <div class="section-box">
 <p style="margin:0 0 5px 0;"><strong>기본 세율 조정</strong></p>
 <div style="display: flex; gap:5px; margin-bottom:10px;">
-<!-- ⚠️ 세율 40% 제한 UI 추가 -->
-<input type="number" id="gov-tax-input" placeholder="세율(%) (최대40)" max="40"
+<input type="number" id="gov-tax-input" placeholder="세율(%) 설정"
 style="margin:0;">
 <button onclick="setTaxRate()" style="background-color:#00bcd4;
 border:none; width:40%; margin:0;">적용</button>
@@ -641,8 +640,18 @@ none;">발표하기</button>
 </div>
 </div>
 <script>
+/* ============================================================
+ *  마을 경제 게임 - 클라이언트 (Socket.IO 연동)
+ *  - 모든 돈 계산/세금/승리판정/라운드종료는 서버(server.js)가 처리합니다.
+ *  - 이 파일은 오직 화면 표시(UI)와 서버로의 요청 전송만 담당합니다.
+ * ============================================================
+ */
 const socket = io();
 
+// ---- 진단용 방어 코드 ----
+// 지금까지 "버튼을 눌러도 아무 반응이 없다"는 문제는 대부분 콘솔에만 에러가 찍히고
+// 화면에는 아무것도 안 보여서 원인을 알기 어려운 경우입니다.
+// 아래 코드는 연결 실패/런타임 에러가 발생하면 alert로 즉시 원인을 보여줍니다.
 socket.on("connect_error", (err) => {
 alert("서버에 연결하지 못했습니다.\n\n에러 내용: " + err.message + "\n\n서버(node server.js)가 실행 중인지, 다른 프로그램이 3000번 포트를 쓰고 있지는 않은지 확인해주세요.");
 });
@@ -650,14 +659,17 @@ socket.io.on("reconnect_attempt", () => {
 console.log("재연결 시도중...");
 });
 
+// onclick으로 호출되는 함수들에서 예외가 나면 콘솔이 아니라 alert로 바로 보여주기 위한 래퍼
 window.addEventListener("error", (event) => {
 alert("스크립트 오류가 발생했습니다:\n\n" + event.message + "\n(파일: " + event.filename + ", 줄: " + event.lineno + ")");
 });
 
+// 역할별 아이콘 (표시용. 게임 로직에는 사용하지 않음)
 const ROLE_ICONS = {
 "학생": "🎒", "상점 주인": "🏪", "기자": "📰", "은행원": "💼", "정부": "🏛"
 };
 
+// ---- 내 상태 (서버가 보내주는 값으로만 갱신됨) ----
 let myRole = null;
 let myRoleInfo = null;
 let myMoney = 0;
@@ -667,9 +679,10 @@ let myLoanedMoney = 0;
 let myInvestedMoney = 0;
 let myInventory = {};
 
+// ---- 방/공용 상태 (서버 roomUpdate로만 갱신됨) ----
 let currentRoomCode = null;
 let isHost = false;
-let roomPlayers = []; 
+let roomPlayers = []; // [{id, nickname, role, roleIcon, ready, readyForNextRound, alive, isHost}]
 let currentRound = 0;
 let totalRounds = 5;
 let currentSituation = null;
@@ -682,13 +695,19 @@ let currentShopPrices = {};
 let totalItemsSold = 0;
 let itemsList = [];
 
+// ---- 라운드 전환 시 사용되는 임시 버퍼 ----
 let pendingRoundResult = null;
-let pendingArticleReveal = undefined;
+let pendingArticleReveal = undefined; // undefined = 아직 모름, null = 이번 라운드엔 없음
 
-let currentChatTarget = null;
-let currentOpenMenu = null;
+// ---- 채팅/기사 관련 ----
+let currentChatTarget = null; // 상대 소켓 id
+let currentOpenMenu = null; // 'bank' | 'trade' | 'chat' | 'article' | 'gov-policy' | 'gov-broadcast' | null
 let hasVotedThisArticle = false;
 
+/* ============================================================
+ *  공용 유틸
+ * ============================================================
+ */
 function addLogEntry(roleName, message, customColor) {
 const logContent = document.getElementById('activity-log-content');
 if (!logContent) return;
@@ -706,6 +725,10 @@ logContent.appendChild(entry);
 logContent.scrollTop = logContent.scrollHeight;
 }
 
+/* ============================================================
+ *  1) 시작 화면: 방 생성 / 방 참가
+ * ============================================================
+ */
 function handleCreateRoom() {
 const nickname = document.getElementById('nickname-input').value.trim();
 if (!nickname) return showIntroError("닉네임을 입력해주세요.");
@@ -729,12 +752,15 @@ currentRoomCode = data.roomCode;
 showLobby();
 });
 
+// ==== [추가된 코드] 참가자가 방에 성공적으로 참여했을 때 화면 전환 ====
 socket.on("roomJoined", (data) => {
 currentRoomCode = data.roomCode;
 showLobby();
 });
+// =======================================================================
 
 socket.on("errorMessage", (data) => {
+// 화면 상황에 맞게 에러 메시지를 표시
 if (document.getElementById('intro').style.display !== 'none') {
 showIntroError(data.message);
 } else if (document.getElementById('lobby').style.display !== 'none') {
@@ -744,6 +770,10 @@ alert(data.message);
 }
 });
 
+/* ============================================================
+ *  2) 대기실
+ * ============================================================
+ */
 function showLobby() {
 document.getElementById('intro').style.display = 'none';
 document.getElementById('lobby').style.display = 'block';
@@ -795,6 +825,10 @@ startBtn.style.display = 'none';
 }
 }
 
+/* ============================================================
+ *  서버 roomUpdate 수신: 공용 상태를 전부 갱신
+ * ============================================================
+ */
 socket.on("roomUpdate", (data) => {
 currentRoomCode = data.roomCode;
 isHost = data.host === socket.id;
@@ -815,12 +849,17 @@ if (!data.gameStarted && document.getElementById('lobby').style.display !== 'non
 renderLobby();
 }
 
+// 게임 중이라면 화면에 보이는 서브메뉴/상태를 최신 데이터로 다시 그림
 if (data.gameStarted && document.getElementById('action-phase').style.display !== 'none') {
 renderStatusPanel();
 refreshCurrentMenu();
 }
 });
 
+/* ============================================================
+ *  3) 게임 시작 (역할 배정)
+ * ============================================================
+ */
 socket.on("gameStarted", (data) => {
 myRole = data.role;
 myRoleInfo = data.roleInfo;
@@ -838,6 +877,8 @@ document.getElementById('published-article-container').style.display = 'none';
 document.getElementById('black-screen').style.display = 'flex';
 });
 
+// 첫 라운드 검은 화면을 닫을 때는 역할 소개 화면(game-ui)을 보여주고,
+// 이후 라운드부터는 바로 액션 화면으로 이동합니다.
 function closeBlackScreen() {
 document.getElementById('black-screen').style.display = 'none';
 document.getElementById('activity-log-container').style.display = 'block';
@@ -872,6 +913,10 @@ renderMainActions();
 backToMainActions();
 }
 
+/* ============================================================
+ *  4) 내 상태 갱신 (서버가 moneyUpdate를 보낼 때마다)
+ * ============================================================
+ */
 socket.on("moneyUpdate", (data) => {
 myMoney = data.money;
 myCredibility = data.credibility;
@@ -886,10 +931,18 @@ refreshCurrentMenu();
 }
 });
 
+/* ============================================================
+ *  5) 실시간 로그
+ * ============================================================
+ */
 socket.on("logUpdate", (data) => {
 addLogEntry(data.roleName, data.message, data.color);
 });
 
+/* ============================================================
+ *  6) 상태 패널 렌더링 (원본의 renderAIStatus() 대체)
+ * ============================================================
+ */
 function renderStatusPanel() {
 const aiStatus = document.getElementById('ai-status');
 if (!aiStatus) return;
@@ -934,6 +987,10 @@ document.getElementById('current-tax-display').innerText = Math.floor(currentTax
 document.getElementById('current-loan-limit-display').innerText = (maxLoanLimit === null || maxLoanLimit === undefined) ? "무제한" : maxLoanLimit + "만";
 }
 
+/* ============================================================
+ *  7) 메인 액션 버튼 (역할별로 다르게 표시)
+ * ============================================================
+ */
 function renderMainActions() {
 const actionsDiv = document.getElementById('main-actions');
 actionsDiv.innerHTML = "";
@@ -1025,11 +1082,10 @@ const isBanned = item.name === bannedItem;
 
 if (myRole === "상점 주인") {
 const disableStr = isBanned ? "disabled" : "";
-// ⚠️ 상점 가격 35만 제한 UI 추가
 shopHtml += `<div class="shop-item-row">
 <span>${mark}${item.name} (원가 ${item.basePrice}만)</span>
 <div style="display: flex; gap:5px;">
-<input type="number" id="price_${item.name}" value="${price}" max="35" placeholder="최대 35" style="width:70px; margin:0; padding:2px;" ${disableStr}>
+<input type="number" id="price_${item.name}" value="${price}" style="width:60px; margin:0; padding:2px;" ${disableStr}>
 <button onclick="changePrice('${item.name}')" ${disableStr}>${isBanned ? '금지됨' : '가격변경'}</button>
 </div>
 </div>`;
@@ -1082,9 +1138,10 @@ targetsHtml += `<button onclick="chatWith('${p.id}', '${p.nickname.replace(/'/g,
 document.getElementById('chat-targets').innerHTML = targetsHtml || "<p style='text-align:center; color:#aaa;'>대화할 상대가 없습니다.</p>";
 }
 
-// =================================================================================
-// 🚨 추가된 밸런스 패치(방어 코드) 🚨
-// =================================================================================
+/* ============================================================
+ *  8) 은행 - 저축/대출/투자/금리
+ * ============================================================
+ */
 function saveMoney() {
 const val = parseInt(document.getElementById('save-input').value, 10);
 if (isNaN(val) || val <= 0 || val > myMoney) return alert("금액을 확인해주세요.");
@@ -1095,7 +1152,6 @@ document.getElementById('save-input').value = "";
 function takeLoan() {
 const val = parseInt(document.getElementById('loan-input').value, 10);
 if (isNaN(val) || val <= 0) return alert("금액을 확인해주세요.");
-if (val > 300) return alert("⚠️ 무리한 대출 방지: 대출은 최대 300만원까지만 가능합니다."); // 밸런스 패치
 socket.emit("takeLoan", { amount: val });
 document.getElementById('loan-input').value = "";
 }
@@ -1110,7 +1166,6 @@ document.getElementById('invest-input').value = "";
 function setDepositRate() {
 const val = parseFloat(document.getElementById('set-deposit-input').value);
 if (isNaN(val) || val < 0) return alert("올바른 금리를 입력하세요.");
-if (val > 30) return alert("⚠️ 경제 마비 방지: 금리는 최대 30%까지만 설정할 수 있습니다."); // 밸런스 패치
 socket.emit("setDepositRate", { rate: val });
 document.getElementById('set-deposit-input').value = "";
 }
@@ -1118,27 +1173,14 @@ document.getElementById('set-deposit-input').value = "";
 function setLoanRate() {
 const val = parseFloat(document.getElementById('set-loan-input').value);
 if (isNaN(val) || val < 0) return alert("올바른 금리를 입력하세요.");
-if (val > 30) return alert("⚠️ 경제 마비 방지: 금리는 최대 30%까지만 설정할 수 있습니다."); // 밸런스 패치
 socket.emit("setLoanRate", { rate: val });
 document.getElementById('set-loan-input').value = "";
 }
 
-function changePrice(itemName) {
-const newPrice = parseInt(document.getElementById(`price_${itemName}`).value, 10);
-if (isNaN(newPrice) || newPrice <= 0) return alert("올바른 가격을 입력하세요.");
-if (newPrice > 35) return alert("⚠️ 폭리 방지: 상점 가격은 최대 35만원까지만 설정할 수 있습니다."); // 밸런스 패치
-socket.emit("changePrice", { itemName, price: newPrice });
-}
-
-function setTaxRate() {
-const val = parseFloat(document.getElementById('gov-tax-input').value);
-if (isNaN(val) || val < 0) return alert("올바른 세율을 입력하세요.");
-if (val > 40) return alert("⚠️ 시장 동결 방지: 세율은 최대 40%까지만 설정할 수 있습니다."); // 밸런스 패치
-socket.emit("setTaxRate", { rate: val });
-document.getElementById('gov-tax-input').value = "";
-}
-// =================================================================================
-
+/* ============================================================
+ *  9) 상점 - 구매/판매/가격변경
+ * ============================================================
+ */
 function buyItem(itemName) {
 socket.emit("buyItem", { itemName });
 }
@@ -1147,6 +1189,16 @@ function sellItem(itemName) {
 socket.emit("sellItem", { itemName });
 }
 
+function changePrice(itemName) {
+const newPrice = parseInt(document.getElementById(`price_${itemName}`).value, 10);
+if (isNaN(newPrice) || newPrice <= 0) return alert("올바른 가격을 입력하세요.");
+socket.emit("changePrice", { itemName, price: newPrice });
+}
+
+/* ============================================================
+ *  10) 기자 - 정보 구매
+ * ============================================================
+ */
 function buyInfo(level) {
 socket.emit("buyInfo", { level });
 }
@@ -1155,6 +1207,10 @@ socket.on("infoPurchased", (data) => {
 alert(`[기밀 정보획득]\n${data.info}`);
 });
 
+/* ============================================================
+ *  11) 개인 채팅 / 송금
+ * ============================================================
+ */
 function chatWith(targetId, nickname) {
 document.getElementById('chat-menu').style.display = 'none';
 document.getElementById('chat-room').style.display = 'flex';
@@ -1209,6 +1265,10 @@ history.innerHTML += `<div class="chat-msg" style="background-color:#b78a00;">${
 history.scrollTop = history.scrollHeight;
 });
 
+/* ============================================================
+ *  12) 기사 작성 / 실시간 투표
+ * ============================================================
+ */
 function publishArticle() {
 const text = document.getElementById('article-input').value.trim();
 if (text.length < 5) return alert("기사 내용이 너무 짧습니다.");
@@ -1227,6 +1287,7 @@ document.getElementById('article-notice-voted-msg').style.display = 'block';
 
 socket.on("articleUpdate", (data) => {
 if (data.published) {
+// 실시간 알림: 작성자 본인이 아닌 사람에게만 투표 UI 노출
 if (data.authorId !== socket.id && document.getElementById('action-phase').style.display !== 'none') {
 hasVotedThisArticle = false;
 document.getElementById('article-notice-author').innerText = data.authorNickname;
@@ -1240,6 +1301,17 @@ pendingArticleReveal = data.reveal;
 tryShowRoundTransition();
 }
 });
+
+/* ============================================================
+ *  13) 정부 기능
+ * ============================================================
+ */
+function setTaxRate() {
+const val = parseFloat(document.getElementById('gov-tax-input').value);
+if (isNaN(val) || val < 0) return alert("올바른 세율을 입력하세요.");
+socket.emit("setTaxRate", { rate: val });
+document.getElementById('gov-tax-input').value = "";
+}
 
 function applyRegulation() {
 const type = document.getElementById('gov-regulation-select').value;
@@ -1258,6 +1330,10 @@ document.getElementById('broadcast-input').value = "";
 backToMainActions();
 }
 
+/* ============================================================
+ *  14) 다음 라운드 진행 (전원 준비 완료 시 서버가 자동 정산)
+ * ============================================================
+ */
 let pendingNewRound = null;
 
 function nextRound() {
@@ -1277,6 +1353,7 @@ tryShowRoundTransition();
 });
 
 function tryShowRoundTransition() {
+// roundResult 와 roundStarted 가 모두 도착해야 화면 전환 (기사 반응은 있을 수도, 없을 수도 있음)
 if (!pendingRoundResult || !pendingNewRound) return;
 
 if (pendingRoundResult.messages && pendingRoundResult.messages.length > 0) {
@@ -1319,6 +1396,10 @@ pendingNewRound = null;
 pendingArticleReveal = undefined;
 }
 
+/* ============================================================
+ *  15) 게임 종료
+ * ============================================================
+ */
 socket.on("gameOver", (data) => {
 document.getElementById('black-screen').style.display = 'none';
 document.getElementById('action-phase').style.display = 'none';
@@ -1341,12 +1422,18 @@ document.getElementById('game-over-summary').innerHTML = html;
 document.getElementById('game-over-screen').style.display = 'block';
 });
 
+/* ============================================================
+ *  16) 접속 종료 / 재접속
+ * ============================================================
+ */
 socket.on("disconnect", () => {
 addLogEntry("시스템", "서버와의 연결이 끊어졌습니다. 재접속을 시도합니다...", "#ff3333");
 });
 
 socket.io.on("reconnect", () => {
 addLogEntry("시스템", "서버에 다시 연결되었습니다.", "#4CAF50");
+// Socket.IO는 새 소켓 id로 재연결되므로, 방 정보를 다시 받아야 하는 경우
+// 새로고침 후 같은 방 번호로 재입장하는 것을 권장합니다.
 });
 </script>
 </body>
