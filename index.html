@@ -646,13 +646,8 @@ none;">발표하기</button>
  *  - 이 파일은 오직 화면 표시(UI)와 서버로의 요청 전송만 담당합니다.
  * ============================================================
  */
-const socket = io();
+const socket = io({ transports: ['websocket', 'polling'] }); // 폴링과 웹소켓 모두 허용하여 안정성 강화
 
-// ---- 연결 상태 표시용 배너 ----
-// Render 같은 무료 호스팅은 한동안 접속이 없으면 서버가 잠들고, 새 방문자가
-// 들어오면 다시 깨어나는 데 몇십 초가 걸릴 수 있습니다. 그 사이에 연결이 잠깐
-// 실패해도 alert()로 화면을 막아버리면 "버튼이 안 눌린다"처럼 보이므로,
-// 대신 화면 상단에 조용한 안내 배너만 띄우고 socket.io가 자동으로 재연결하도록 둡니다.
 let isSocketConnected = false;
 
 function ensureConnectionBanner() {
@@ -701,17 +696,14 @@ isSocketConnected = true;
 setConnectionBanner(null);
 });
 
-// 스크립트 오류는 alert로 화면을 막지 않고 콘솔에만 기록합니다.
 window.addEventListener("error", (event) => {
 console.error("스크립트 오류:", event.message, event.filename, event.lineno);
 });
 
-// 역할별 아이콘 (표시용. 게임 로직에는 사용하지 않음)
 const ROLE_ICONS = {
 "학생": "🎒", "상점 주인": "🏪", "기자": "📰", "은행원": "💼", "정부": "🏛"
 };
 
-// ---- 내 상태 (서버가 보내주는 값으로만 갱신됨) ----
 let myRole = null;
 let myRoleInfo = null;
 let myMoney = 0;
@@ -721,10 +713,9 @@ let myLoanedMoney = 0;
 let myInvestedMoney = 0;
 let myInventory = {};
 
-// ---- 방/공용 상태 (서버 roomUpdate로만 갱신됨) ----
 let currentRoomCode = null;
 let isHost = false;
-let roomPlayers = []; // [{id, nickname, role, roleIcon, ready, readyForNextRound, alive, isHost}]
+let roomPlayers = []; 
 let currentRound = 0;
 let totalRounds = 5;
 let currentSituation = null;
@@ -737,19 +728,13 @@ let currentShopPrices = {};
 let totalItemsSold = 0;
 let itemsList = [];
 
-// ---- 라운드 전환 시 사용되는 임시 버퍼 ----
 let pendingRoundResult = null;
-let pendingArticleReveal = undefined; // undefined = 아직 모름, null = 이번 라운드엔 없음
+let pendingArticleReveal = undefined; 
 
-// ---- 채팅/기사 관련 ----
-let currentChatTarget = null; // 상대 소켓 id
-let currentOpenMenu = null; // 'bank' | 'trade' | 'chat' | 'article' | 'gov-policy' | 'gov-broadcast' | null
+let currentChatTarget = null; 
+let currentOpenMenu = null; 
 let hasVotedThisArticle = false;
 
-/* ============================================================
- *  공용 유틸
- * ============================================================
- */
 function addLogEntry(roleName, message, customColor) {
 const logContent = document.getElementById('activity-log-content');
 if (!logContent) return;
@@ -768,7 +753,7 @@ logContent.scrollTop = logContent.scrollHeight;
 }
 
 /* ============================================================
- *  1) 시작 화면: 방 생성 / 방 참가
+ *  1) 시작 화면: 방 생성 / 방 참가 (버그 수정됨)
  * ============================================================
  */
 function handleCreateRoom() {
@@ -776,6 +761,7 @@ const nickname = document.getElementById('nickname-input').value.trim();
 if (!nickname) return showIntroError("닉네임을 입력해주세요.");
 if (!isSocketConnected) {
 showIntroError("서버에 연결하는 중입니다. 잠시 후 다시 눌러주세요. (서버가 깨어나는 데 몇십 초 걸릴 수 있어요)");
+return; // [버그 수정] 연결이 안 되었을 때 요청을 보내지 않고 막음
 }
 socket.emit("createRoom", { nickname });
 }
@@ -787,6 +773,7 @@ if (!nickname) return showIntroError("닉네임을 입력해주세요.");
 if (!roomCode || roomCode.length !== 6) return showIntroError("6자리 방 번호를 입력해주세요.");
 if (!isSocketConnected) {
 showIntroError("서버에 연결하는 중입니다. 잠시 후 다시 눌러주세요. (서버가 깨어나는 데 몇십 초 걸릴 수 있어요)");
+return; // [버그 수정] 연결이 안 되었을 때 요청을 보내지 않고 막음
 }
 socket.emit("joinRoom", { roomCode, nickname });
 }
@@ -800,15 +787,12 @@ currentRoomCode = data.roomCode;
 showLobby();
 });
 
-// ==== [추가된 코드] 참가자가 방에 성공적으로 참여했을 때 화면 전환 ====
 socket.on("roomJoined", (data) => {
 currentRoomCode = data.roomCode;
 showLobby();
 });
-// =======================================================================
 
 socket.on("errorMessage", (data) => {
-// 화면 상황에 맞게 에러 메시지를 표시
 if (document.getElementById('intro').style.display !== 'none') {
 showIntroError(data.message);
 } else if (document.getElementById('lobby').style.display !== 'none') {
@@ -818,10 +802,6 @@ alert(data.message);
 }
 });
 
-/* ============================================================
- *  2) 대기실
- * ============================================================
- */
 function showLobby() {
 document.getElementById('intro').style.display = 'none';
 document.getElementById('lobby').style.display = 'block';
@@ -873,10 +853,6 @@ startBtn.style.display = 'none';
 }
 }
 
-/* ============================================================
- *  서버 roomUpdate 수신: 공용 상태를 전부 갱신
- * ============================================================
- */
 socket.on("roomUpdate", (data) => {
 currentRoomCode = data.roomCode;
 isHost = data.host === socket.id;
@@ -897,17 +873,12 @@ if (!data.gameStarted && document.getElementById('lobby').style.display !== 'non
 renderLobby();
 }
 
-// 게임 중이라면 화면에 보이는 서브메뉴/상태를 최신 데이터로 다시 그림
 if (data.gameStarted && document.getElementById('action-phase').style.display !== 'none') {
 renderStatusPanel();
 refreshCurrentMenu();
 }
 });
 
-/* ============================================================
- *  3) 게임 시작 (역할 배정)
- * ============================================================
- */
 socket.on("gameStarted", (data) => {
 myRole = data.role;
 myRoleInfo = data.roleInfo;
@@ -925,8 +896,6 @@ document.getElementById('published-article-container').style.display = 'none';
 document.getElementById('black-screen').style.display = 'flex';
 });
 
-// 첫 라운드 검은 화면을 닫을 때는 역할 소개 화면(game-ui)을 보여주고,
-// 이후 라운드부터는 바로 액션 화면으로 이동합니다.
 function closeBlackScreen() {
 document.getElementById('black-screen').style.display = 'none';
 document.getElementById('activity-log-container').style.display = 'block';
@@ -961,10 +930,6 @@ renderMainActions();
 backToMainActions();
 }
 
-/* ============================================================
- *  4) 내 상태 갱신 (서버가 moneyUpdate를 보낼 때마다)
- * ============================================================
- */
 socket.on("moneyUpdate", (data) => {
 myMoney = data.money;
 myCredibility = data.credibility;
@@ -979,18 +944,10 @@ refreshCurrentMenu();
 }
 });
 
-/* ============================================================
- *  5) 실시간 로그
- * ============================================================
- */
 socket.on("logUpdate", (data) => {
 addLogEntry(data.roleName, data.message, data.color);
 });
 
-/* ============================================================
- *  6) 상태 패널 렌더링 (원본의 renderAIStatus() 대체)
- * ============================================================
- */
 function renderStatusPanel() {
 const aiStatus = document.getElementById('ai-status');
 if (!aiStatus) return;
@@ -1035,10 +992,6 @@ document.getElementById('current-tax-display').innerText = Math.floor(currentTax
 document.getElementById('current-loan-limit-display').innerText = (maxLoanLimit === null || maxLoanLimit === undefined) ? "무제한" : maxLoanLimit + "만";
 }
 
-/* ============================================================
- *  7) 메인 액션 버튼 (역할별로 다르게 표시)
- * ============================================================
- */
 function renderMainActions() {
 const actionsDiv = document.getElementById('main-actions');
 actionsDiv.innerHTML = "";
@@ -1186,10 +1139,6 @@ targetsHtml += `<button onclick="chatWith('${p.id}', '${p.nickname.replace(/'/g,
 document.getElementById('chat-targets').innerHTML = targetsHtml || "<p style='text-align:center; color:#aaa;'>대화할 상대가 없습니다.</p>";
 }
 
-/* ============================================================
- *  8) 은행 - 저축/대출/투자/금리
- * ============================================================
- */
 function saveMoney() {
 const val = parseInt(document.getElementById('save-input').value, 10);
 if (isNaN(val) || val <= 0 || val > myMoney) return alert("금액을 확인해주세요.");
@@ -1225,10 +1174,6 @@ socket.emit("setLoanRate", { rate: val });
 document.getElementById('set-loan-input').value = "";
 }
 
-/* ============================================================
- *  9) 상점 - 구매/판매/가격변경
- * ============================================================
- */
 function buyItem(itemName) {
 socket.emit("buyItem", { itemName });
 }
@@ -1243,10 +1188,6 @@ if (isNaN(newPrice) || newPrice <= 0) return alert("올바른 가격을 입력�
 socket.emit("changePrice", { itemName, price: newPrice });
 }
 
-/* ============================================================
- *  10) 기자 - 정보 구매
- * ============================================================
- */
 function buyInfo(level) {
 socket.emit("buyInfo", { level });
 }
@@ -1255,10 +1196,6 @@ socket.on("infoPurchased", (data) => {
 alert(`[기밀 정보획득]\n${data.info}`);
 });
 
-/* ============================================================
- *  11) 개인 채팅 / 송금
- * ============================================================
- */
 function chatWith(targetId, nickname) {
 document.getElementById('chat-menu').style.display = 'none';
 document.getElementById('chat-room').style.display = 'flex';
@@ -1313,10 +1250,6 @@ history.innerHTML += `<div class="chat-msg" style="background-color:#b78a00;">${
 history.scrollTop = history.scrollHeight;
 });
 
-/* ============================================================
- *  12) 기사 작성 / 실시간 투표
- * ============================================================
- */
 function publishArticle() {
 const text = document.getElementById('article-input').value.trim();
 if (text.length < 5) return alert("기사 내용이 너무 짧습니다.");
@@ -1335,7 +1268,6 @@ document.getElementById('article-notice-voted-msg').style.display = 'block';
 
 socket.on("articleUpdate", (data) => {
 if (data.published) {
-// 실시간 알림: 작성자 본인이 아닌 사람에게만 투표 UI 노출
 if (data.authorId !== socket.id && document.getElementById('action-phase').style.display !== 'none') {
 hasVotedThisArticle = false;
 document.getElementById('article-notice-author').innerText = data.authorNickname;
@@ -1350,10 +1282,6 @@ tryShowRoundTransition();
 }
 });
 
-/* ============================================================
- *  13) 정부 기능
- * ============================================================
- */
 function setTaxRate() {
 const val = parseFloat(document.getElementById('gov-tax-input').value);
 if (isNaN(val) || val < 0) return alert("올바른 세율을 입력하세요.");
@@ -1378,10 +1306,6 @@ document.getElementById('broadcast-input').value = "";
 backToMainActions();
 }
 
-/* ============================================================
- *  14) 다음 라운드 진행 (전원 준비 완료 시 서버가 자동 정산)
- * ============================================================
- */
 let pendingNewRound = null;
 
 function nextRound() {
@@ -1401,7 +1325,6 @@ tryShowRoundTransition();
 });
 
 function tryShowRoundTransition() {
-// roundResult 와 roundStarted 가 모두 도착해야 화면 전환 (기사 반응은 있을 수도, 없을 수도 있음)
 if (!pendingRoundResult || !pendingNewRound) return;
 
 if (pendingRoundResult.messages && pendingRoundResult.messages.length > 0) {
@@ -1445,7 +1368,7 @@ pendingArticleReveal = undefined;
 }
 
 /* ============================================================
- *  15) 게임 종료
+ *  15) 게임 종료 (잘려있던 HTML 코드 복구 완료)
  * ============================================================
  */
 socket.on("gameOver", (data) => {
@@ -1461,27 +1384,13 @@ const resultColor = s.achieved ? '#4CAF50' : '#ff3333';
 const resultLabel = s.achieved ? '목표 달성 성공 ✔' : '목표 달성 실패';
 html += `<div class="status-box" style="${mine ? 'border-color:#FFD700;' : ''}">
 <p style="margin:0 0 5px 0;"><strong>${mine ? '⭐ 나' : s.nickname}</strong> - ${ROLE_ICONS[s.role] || ''} ${s.role}</p>
-<p style="margin:0; font-size:0.9rem; color:#ccc;">${s.detail}</p>
-<p style="margin:5px 0 0 0; font-weight:bold; color:${resultColor};">${resultLabel}</p>
+<p style="margin:0; font-size:0.9rem; color:${resultColor};">${resultLabel} (최종 자산: ${s.money}만)</p>
+<p style="margin:0; font-size:0.8rem; color:#aaa;">${s.detail}</p>
 </div>`;
 });
 
 document.getElementById('game-over-summary').innerHTML = html;
 document.getElementById('game-over-screen').style.display = 'block';
-});
-
-/* ============================================================
- *  16) 접속 종료 / 재접속
- * ============================================================
- */
-socket.on("disconnect", () => {
-addLogEntry("시스템", "서버와의 연결이 끊어졌습니다. 재접속을 시도합니다...", "#ff3333");
-});
-
-socket.io.on("reconnect", () => {
-addLogEntry("시스템", "서버에 다시 연결되었습니다.", "#4CAF50");
-// Socket.IO는 새 소켓 id로 재연결되므로, 방 정보를 다시 받아야 하는 경우
-// 새로고침 후 같은 방 번호로 재입장하는 것을 권장합니다.
 });
 </script>
 </body>
